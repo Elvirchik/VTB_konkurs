@@ -14,3 +14,7 @@
 
 ## Установка и запуск
 
+- python -m venv .venv
+- pip install django pandas
+- python manage.py migrate
+- python manage.py runserver
