@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Аналитика{% endblock %}
+{% block content %}
+<h2 class="mb-4">Аналитика расходов и доходов</h2>
+
+<div class="row mb-3">
+  <div class="col-md-4">
+    <form method="get" class="d-flex align-items-end gap-2">
+      <div class="flex-grow-1">
+        <label for="year-select" class="form-label mb-1">Год для помесячной аналитики</label>
+        <select name="year" id="year-select" class="form-select">
+          <option value="">Все годы</option>
+          {% for y in years %}
+            <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn btn-outline-primary">Показать</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6 mb-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title">Расходы по категориям</h5>
+        <canvas id="expensesByCategory"></canvas>
+        {% if main_category %}
+        <p class="mt-3 small">
+          Больше всего денег уходит в категорию <strong>{{ main_category }}</strong>.
+          Подумайте, можно ли сократить траты здесь.
+        </p>
+        {% else %}
+        <p class="mt-3 text-muted small">Добавьте операции, чтобы увидеть аналитику.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6 mb-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title">
+          Доходы и расходы по месяцам
+          {% if selected_year %}за {{ selected_year }}{% endif %}
+        </h5>
+        <canvas id="incomeVsExpense"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const catLabels   = {{ by_cat.labels|safe }};
+  const catData     = {{ by_cat.data|safe }};
+  const monthLabels = {{ by_month.labels|safe }};
+  const incomeData  = {{ by_month.income|safe }};
+  const expenseData = {{ by_month.expense|safe }};
+
+  console.log("analytics catLabels:", catLabels);
+  console.log("analytics catData:", catData);
+  console.log("analytics monthLabels:", monthLabels);
+  console.log("analytics incomeData:", incomeData);
+  console.log("analytics expenseData:", expenseData);
+
+  const ctxCat = document.getElementById('expensesByCategory');
+  if (ctxCat && catLabels.length) {
+    new Chart(ctxCat, {
+      type: 'doughnut',
+      data: {
+        labels: catLabels,
+        datasets: [{
+          data: catData,
+          backgroundColor: [
+            '#0d6efd','#dc3545','#198754',
+            '#ffc107','#6f42c1','#20c997','#fd7e14'
+          ],
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const label = context.label || '';
+                const value = context.raw || 0;
+                const dataArr = context.dataset.data || [];
+                const total = dataArr.reduce((a, b) => a + b, 0);
+                const percent = total ? (value / total * 100).toFixed(1) : 0;
+                return label + ': ' + value + ' ₽ (' + percent + '%)';
+              }
+            }
+          },
+          datalabels: {
+            color: '#fff',
+            font: {
+              weight: 'bold',
+              size: 12,
+            },
+            formatter: function(value, context) {
+              const dataArr = context.dataset.data || [];
+              const total = dataArr.reduce((a, b) => a + b, 0);
+              if (!total || !value) return '';
+              const percent = (value / total * 100).toFixed(1);
+              return percent + '%';
+            }
+          }
+        }
+      }
+    });
+  }
+
+  const ctxMonth = document.getElementById('incomeVsExpense');
+  if (ctxMonth && monthLabels.length) {
+    new Chart(ctxMonth, {
+      type: 'bar',
+      data: {
+        labels: monthLabels,
+        datasets: [
+          {
+            label: 'Доходы',
+            data: incomeData,
+            backgroundColor: 'rgba(25, 135, 84, 0.7)',
+          },
+          {
+            label: 'Расходы',
+            data: expenseData,
+            backgroundColor: 'rgba(220, 53, 69, 0.7)',
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  }
+</script>
+{% endblock %}
