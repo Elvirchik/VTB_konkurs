@@ -15,11 +15,12 @@ from .services import expenses_by_category_qs, monthly_balance_qs
 def signup_view(request):
     if request.user.is_authenticated:
         return redirect("finance:dashboard")
-
+    # Обрабатываем отправку формы регистрации
     if request.method == "POST":
         form = SignUpForm(request.POST)
         if form.is_valid():
             user = form.save()
+            # При регистрации создаются базовые категории для нового пользователя
             Category.objects.bulk_create(
                 [
                     Category(user=user, name="Зарплата", is_income=True),
@@ -37,11 +38,11 @@ def signup_view(request):
 
     return render(request, "registration/signup.html", {"form": form})
 
-
+ # Доступ к этой странице возможен только для вошедших пользователей
 @login_required
 def dashboard_view(request):
     user = request.user
-
+    # Получаем параметры фильтрации из GET-запроса (диапазон дат, тип операции, категория)
     date_from_str = request.GET.get("date_from")
     date_to_str = request.GET.get("date_to")
     tx_type = request.GET.get("type")
@@ -50,7 +51,7 @@ def dashboard_view(request):
     today = datetime.today().date()
     default_from = today.replace(day=1)
     default_to = today
-
+    # Преобразуем даты из строк в объекты date, если переданы, иначе используем значения по умолчанию
     try:
         date_from = (
             datetime.strptime(date_from_str, "%Y-%m-%d").date()
@@ -68,21 +69,21 @@ def dashboard_view(request):
         )
     except ValueError:
         date_to = default_to
-
+    # Получаем транзакции пользователя за указанный период
     transactions_qs = Transaction.objects.filter(
         user=user,
         date__gte=date_from,
         date__lte=date_to,
     )
-
+    # Фильтрация по типу (доход/расход) если задана
     if tx_type in ("income", "expense"):
         transactions_qs = transactions_qs.filter(type=tx_type)
-
+    # Фильтрация по категории если указана
     if category_id and category_id.isdigit():
         transactions_qs = transactions_qs.filter(category_id=int(category_id))
-
+    # Показываем последние 5 транзакций для краткости
     transactions = transactions_qs.order_by("-date", "-id")[:5]
-
+    # Считаем суммы доходов и расходов за период
     income_sum = (
         Transaction.objects.filter(
             user=user,
@@ -102,7 +103,7 @@ def dashboard_view(request):
         or 0
     )
     balance = income_sum - expense_sum
-
+    # Получаем агрегированные данные по суммам операций по категориям для графиков и отчетов
     agg = (
         transactions_qs.values("category__name")
         .annotate(total=Sum("amount"))
@@ -116,10 +117,10 @@ def dashboard_view(request):
         chart_labels.append(label)
         chart_data.append(float(row["total"]))
 
-    user_categories = Category.objects.filter(user=user).order_by("name")
+    user_categories = Category.objects.filter(user=user).order_by("name")  # Все категории пользователя
 
-    goals = Goal.objects.filter(user=user).order_by("-created_at")[:3]
-
+    goals = Goal.objects.filter(user=user).order_by("-created_at")[:3]  # Три последние цели пользователя
+    # Передаем все данные в шаблон для отображения дашборда
     context = {
         "transactions": transactions,
         "income_sum": income_sum,
@@ -139,7 +140,7 @@ def dashboard_view(request):
     return render(request, "finance/dashboard.html", context)
 
 
-@login_required
+@login_required # Получаем все транзакции текущего пользователя и показываем в списке
 def transactions_list_view(request):
     transactions = Transaction.objects.filter(user=request.user)
     return render(request, "finance/transactions_list.html", {"transactions": transactions})
@@ -147,22 +148,22 @@ def transactions_list_view(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def transaction_create_view(request):
+def transaction_create_view(request): # Создание новой транзакции
     if request.method == "POST":
         form = TransactionForm(request.POST, user=request.user)
         if form.is_valid():
             transaction = form.save(commit=False)
-            transaction.user = request.user
+            transaction.user = request.user  # Привязка к текущему пользователю
             transaction.save()
             return redirect("finance:transactions_list")
     else:
-        form = TransactionForm(user=request.user)
+        form = TransactionForm(user=request.user)  # Показать пустую форму
     return render(request, "finance/transaction_form.html", {"form": form})
 
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def transaction_update_view(request, pk):
+def transaction_update_view(request, pk): # Редактирование транзакции по ее id (pk)
     transaction = get_object_or_404(Transaction, pk=pk, user=request.user)
     if request.method == "POST":
         form = TransactionForm(
@@ -182,11 +183,11 @@ def transaction_update_view(request, pk):
 @require_http_methods(["POST"])
 def transaction_delete_view(request, pk):
     transaction = get_object_or_404(Transaction, pk=pk, user=request.user)
-    transaction.delete()
+    transaction.delete()  # Удаление транзакции по id
     return redirect("finance:transactions_list")
 
 
-@login_required
+@login_required # Список финансовых целей для пользователя
 def goals_list_view(request):
     goals = Goal.objects.filter(user=request.user)
     return render(request, "finance/goals_list.html", {"goals": goals})
@@ -194,7 +195,7 @@ def goals_list_view(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def goal_create_view(request):
+def goal_create_view(request):# Создание новой финансовой цели
     if request.method == "POST":
         form = GoalForm(request.POST)
         if form.is_valid():
@@ -209,7 +210,7 @@ def goal_create_view(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def goal_update_view(request, pk):
+def goal_update_view(request, pk):# Редактирование финансовой цели
     goal = get_object_or_404(Goal, pk=pk, user=request.user)
     completed_before = goal.is_completed
     if request.method == "POST":
@@ -217,7 +218,7 @@ def goal_update_view(request, pk):
         if form.is_valid():
             goal = form.save()
             completed_after = goal.is_completed
-            message = None
+            message = None # Если цель стала достигнутой после редактирования — показать сообщение успеха
             if not completed_before and completed_after:
                 message = "Ваша цель достигнута, вы можете воплотить её!"
             return render(
@@ -231,7 +232,7 @@ def goal_update_view(request, pk):
 
 
 @login_required
-@require_http_methods(["POST"])
+@require_http_methods(["POST"]) # Удаление цели по id
 def goal_delete_view(request, pk):
     goal = get_object_or_404(Goal, pk=pk, user=request.user)
     goal.delete()
@@ -240,7 +241,7 @@ def goal_delete_view(request, pk):
 
 @login_required
 def analytics_view(request):
-    user = request.user
+    user = request.user# Отображение страницы аналитики финансов
 
     year_str = request.GET.get("year")
     selected_year = None
@@ -278,13 +279,13 @@ def analytics_view(request):
 @require_http_methods(["POST"])
 def goal_add_amount_view(request, pk):
     goal = get_object_or_404(Goal, pk=pk, user=request.user)
-
+    # Добавление суммы к финансовой цели
     if goal.is_completed:
         return redirect("finance:goals_list")
 
     form = GoalAddAmountForm(request.POST)
-    if form.is_valid():
-        amount = form.cleaned_data["amount"]
+    if form.is_valid():# Если цель уже достигнута, переадресуем на список целей
+        amount = form.cleaned_data["amount"]# Увеличиваем текущую сумму накоплений по цели
         goal.current_amount = goal.current_amount + amount
         goal.save()
     return redirect("finance:goals_list")

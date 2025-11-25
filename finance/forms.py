@@ -35,10 +35,10 @@ class TransactionForm(forms.ModelForm):
         self.fields["amount"].help_text = "Введите положительную сумму операции."
         self.fields["date"].help_text = "Дата операции не может быть в будущем."
         self.fields["description"].help_text = "Кратко опишите операцию (необязательно)."
-
+        # Ограничиваем категории только теми, которые принадлежат текущему пользователю
         if user is not None:
             self.fields["category"].queryset = Category.objects.filter(user=user)
-
+        # Добавляем стили CSS и атрибуты в поля формы для удобства отображения и валидации
         for name, field in self.fields.items():
             css = field.widget.attrs.get("class", "")
             if name in ("type", "category"):
@@ -54,6 +54,7 @@ class TransactionForm(forms.ModelForm):
             else:
                 field.widget.attrs["class"] = (css + " form-control").strip()
 
+    # Валидация поля amount — сумма должна быть больше 0
     def clean_amount(self):
         amount = self.cleaned_data.get("amount")
         if amount is None:
@@ -62,6 +63,7 @@ class TransactionForm(forms.ModelForm):
             raise forms.ValidationError("Сумма операции должна быть больше нуля.")
         return amount
 
+    # Валидация поля date — дата не должна быть в будущем
     def clean_date(self):
         d = self.cleaned_data.get("date")
         if d is None:
@@ -82,7 +84,7 @@ class GoalForm(forms.ModelForm):
             "deadline": forms.DateInput(
                 attrs={
                     "type": "date",
-                }
+                }# виджет выбора даты
             ),
         }
 
@@ -93,11 +95,11 @@ class GoalForm(forms.ModelForm):
         self.fields["target_amount"].help_text = "Сколько хотите накопить по этой цели."
         self.fields["current_amount"].help_text = "Сколько уже накоплено по цели."
         self.fields["deadline"].help_text = "Укажите дату в будущем (начиная с завтрашнего дня)."
-
+        # Добавляем CSS классы для стилизации полей
         for name, field in self.fields.items():
             css = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = (css + " form-control").strip()
-
+        # Устанавливаем минимальное значение для target_amount и current_amount
         if isinstance(self.fields["target_amount"], forms.DecimalField):
             self.fields["target_amount"].min_value = Decimal("0.01")
             self.fields["target_amount"].widget.attrs["min"] = "0.01"
@@ -120,6 +122,7 @@ class GoalForm(forms.ModelForm):
             )
         return d
 
+    # Валидация целевой суммы - должна быть больше нуля
     def clean_target_amount(self):
         value = self.cleaned_data.get("target_amount")
         if value is None:
@@ -128,6 +131,7 @@ class GoalForm(forms.ModelForm):
             raise forms.ValidationError("Целевая сумма должна быть больше нуля.")
         return value
 
+    # Валидация текущей суммы — не может быть отрицательной
     def clean_current_amount(self):
         value = self.cleaned_data.get("current_amount")
         if value is None:
@@ -136,7 +140,7 @@ class GoalForm(forms.ModelForm):
             raise forms.ValidationError("Текущая сумма не может быть отрицательной.")
         return value
 
-
+# Поле для добавления суммы к цели с минимальным значением
 class GoalAddAmountForm(forms.Form):
     amount = forms.DecimalField(
         label="Добавить сумму",
