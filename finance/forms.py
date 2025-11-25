@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
@@ -8,7 +9,7 @@ from .models import Transaction, Goal, Category
 
 
 class SignUpForm(UserCreationForm):
-    email = forms.EmailField(required=True)
+    email = forms.EmailField(required=True, help_text="Укажите действующий адрес электронной почты.")
 
     class Meta:
         model = User
@@ -30,6 +31,11 @@ class TransactionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+
+        self.fields["amount"].help_text = "Введите положительную сумму операции."
+        self.fields["date"].help_text = "Дата операции не может быть в будущем."
+        self.fields["description"].help_text = "Кратко опишите операцию (необязательно)."
+
         if user is not None:
             self.fields["category"].queryset = Category.objects.filter(user=user)
 
@@ -39,9 +45,12 @@ class TransactionForm(forms.ModelForm):
                 field.widget.attrs["class"] = (css + " form-select").strip()
             elif name == "amount":
                 field.widget.attrs["class"] = (css + " form-control").strip()
-                field.widget.attrs["min"] = "1"
+                field.widget.attrs["min"] = "0.01"
                 if isinstance(field, forms.DecimalField):
-                    field.min_value = Decimal("1.00")
+                    field.min_value = Decimal("0.01")
+            elif name == "date":
+                field.widget.attrs["class"] = (css + " form-control").strip()
+                field.widget.attrs["max"] = date.today().isoformat()
             else:
                 field.widget.attrs["class"] = (css + " form-control").strip()
 
@@ -49,9 +58,20 @@ class TransactionForm(forms.ModelForm):
         amount = self.cleaned_data.get("amount")
         if amount is None:
             return amount
-        if amount < Decimal("1.00"):
-            raise forms.ValidationError("Сумма операции должна быть не меньше 1.")
+        if amount <= Decimal("0.00"):
+            raise forms.ValidationError("Сумма операции должна быть больше нуля.")
         return amount
+
+    def clean_date(self):
+        d = self.cleaned_data.get("date")
+        if d is None:
+            return d
+        today = date.today()
+        if d > today:
+            raise forms.ValidationError(
+                "Дата операции не может быть в будущем. Укажите сегодняшнюю или прошедшую дату."
+            )
+        return d
 
 
 class GoalForm(forms.ModelForm):
@@ -69,6 +89,11 @@ class GoalForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.fields["name"].help_text = "Например: подушка безопасности, отпуск, новый телефон."
+        self.fields["target_amount"].help_text = "Сколько хотите накопить по этой цели."
+        self.fields["current_amount"].help_text = "Сколько уже накоплено по цели."
+        self.fields["deadline"].help_text = "Укажите дату в будущем (начиная с завтрашнего дня)."
+
         for name, field in self.fields.items():
             css = field.widget.attrs.get("class", "")
             field.widget.attrs["class"] = (css + " form-control").strip()
@@ -80,14 +105,19 @@ class GoalForm(forms.ModelForm):
             self.fields["current_amount"].min_value = Decimal("0.00")
             self.fields["current_amount"].widget.attrs["min"] = "0.00"
 
+        tomorrow = date.today() + timedelta(days=1)
+        self.fields["deadline"].widget.attrs["min"] = tomorrow.isoformat()
+
     def clean_deadline(self):
         d = self.cleaned_data.get("deadline")
         if d is None:
             return d
 
         today = date.today()
-        if d < today:
-            raise forms.ValidationError("Нельзя ставить дедлайн в прошлом.")
+        if d <= today:
+            raise forms.ValidationError(
+                "Дедлайн цели должен быть в будущем. Укажите дату, начиная с завтрашнего дня."
+            )
         return d
 
     def clean_target_amount(self):
@@ -113,6 +143,7 @@ class GoalAddAmountForm(forms.Form):
         max_digits=12,
         decimal_places=2,
         min_value=Decimal("0.01"),
+        help_text="Введите сумму, которую хотите добавить к цели.",
     )
 
     def __init__(self, *args, **kwargs):

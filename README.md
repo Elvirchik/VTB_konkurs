@@ -15,6 +15,8 @@
 ## Установка и запуск
 
 - python -m venv .venv
+- source .venv\bin\activate - linux
+- .\.venv\Scripts\activate - windows
 - pip install django pandas
 - python manage.py migrate
 - python manage.py runserver
