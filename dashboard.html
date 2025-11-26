@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block title %}Главная{% endblock %}
+{% block content %}
+
+<!-- Форма фильтров (авто-submit) -->
+<form method="get" id="filters-form" class="row g-3 mb-3 align-items-end">
+  <div class="col-md-3">
+    <label class="form-label">Дата с</label>
+    <input type="date"
+           name="date_from"
+           id="date_from"
+           class="form-control auto-submit"
+           value="{{ date_from|date:'Y-m-d' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Дата по</label>
+    <input type="date"
+           name="date_to"
+           id="date_to"
+           class="form-control auto-submit"
+           value="{{ date_to|date:'Y-m-d' }}">
+  </div>
+
+  <div class="col-md-2">
+    <label class="form-label">Тип операции</label>
+    <select name="type" class="form-select auto-submit">
+  <option value="income" {% if selected_type == 'income' %}selected{% endif %}>Только доходы</option>
+  <option value="expense" {% if not selected_type or selected_type == 'expense' %}selected{% endif %}>Только расходы</option>
+</select>
+  </div>
+
+  <div class="col-md-4">
+    <label class="form-label">Категория</label>
+    <select name="category" class="form-select auto-submit">
+      <option value="" {% if not selected_category_id %}selected{% endif %}>Все категории</option>
+      {% for cat in categories %}
+      <option value="{{ cat.id }}"
+              {% if selected_category_id == cat.id %}selected{% endif %}>
+        {{ cat.name }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+
+<!-- Быстрые периоды -->
+<div class="row mb-3">
+  <div class="col-md-12">
+    <div class="btn-group" role="group" aria-label="Быстрый выбор периода">
+      <button type="button" class="btn btn-outline-secondary period-btn" data-period="today">Сегодня</button>
+      <button type="button" class="btn btn-outline-secondary period-btn" data-period="7">Неделя</button>
+      <button type="button" class="btn btn-outline-secondary period-btn" data-period="30">Месяц</button>
+      <button type="button" class="btn btn-outline-secondary period-btn" data-period="180">Полгода</button>
+      <button type="button" class="btn btn-outline-secondary period-btn" data-period="365">Год</button>
+    </div>
+  </div>
+</div>
+
+<!-- Верхний блок с диаграммой и легендой -->
+<div class="row mb-4">
+  <div class="col-md-12">
+    <div class="card shadow-sm">
+      <div class="card-body row align-items-center">
+        <!-- Диаграмма: шире -->
+        <div class="col-md-8 d-flex justify-content-center mb-3 mb-md-0">
+          <div style="max-width: 480px; width: 100%;">
+            <canvas id="mainPeriodChart"></canvas>
+          </div>
+        </div>
+        <!-- Легенда: компактная -->
+        <div class="col-md-4">
+          <h6 class="mb-2">Категории и суммы</h6>
+          <ul id="chart-legend"
+              class="list-unstyled mb-0"
+              style="font-size: 0.85rem; max-height: 170px; overflow-y: auto;">
+            <!-- JS заполнит сюда: цвет, категория, сумма, % -->
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Баланс, доходы, расходы -->
+<div class="row mb-4">
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h5>Баланс за период</h5>
+        <p class="display-6">{{ balance }} ₽</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h6>Доходы за период</h6>
+        <p class="h4 text-success">{{ income_sum }} ₽</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-body text-center">
+        <h6>Расходы за период</h6>
+        <p class="h4 text-danger">{{ expense_sum }} ₽</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Последние операции -->
+<div class="row mb-4">
+  <div class="col-md-12">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h4 class="mb-0">Последние операции за период</h4>
+      <a href="{% url 'finance:transactions_list' %}" class="btn btn-sm btn-outline-primary">Все операции</a>
+    </div>
+    <ul class="list-group shadow-sm">
+      {% for t in transactions %}
+      <li class="list-group-item d-flex justify-content-between">
+        <div>
+          <strong>{{ t.get_type_display }}</strong>
+          {% if t.category %} · {{ t.category.name }}{% endif %}
+          <div class="text-muted small">{{ t.date }} — {{ t.description }}</div>
+        </div>
+        <span class="{% if t.type == 'income' %}text-success{% else %}text-danger{% endif %}">
+          {% if t.type == 'income' %}+{% else %}-{% endif %}{{ t.amount }} ₽
+        </span>
+      </li>
+      {% empty %}
+      <li class="list-group-item text-muted">Пока нет операций за выбранный период</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<!-- Блок с целями -->
+<div class="row">
+  <div class="col-md-12">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h4 class="mb-0">Ваши финансовые цели</h4>
+      <a href="{% url 'finance:goals_list' %}" class="btn btn-sm btn-outline-primary">Управление</a>
+    </div>
+    {% for goal in goals %}
+    <div class="card mb-2 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <h5 class="card-title mb-1">{{ goal.name }}</h5>
+          <span class="small text-muted">
+            {{ goal.current_amount }} / {{ goal.target_amount }} ₽
+          </span>
+        </div>
+
+        <div class="progress mt-2" style="height: 10px;">
+          <div class="progress-bar {% if goal.is_completed %}bg-success{% else %}bg-info{% endif %}"
+               role="progressbar"
+               style="width: {{ goal.progress_percent|floatformat:0 }}%;"
+               aria-valuenow="{{ goal.progress_percent|floatformat:0 }}"
+               aria-valuemin="0"
+               aria-valuemax="100">
+          </div>
+        </div>
+
+        <div class="mt-1 small text-muted">
+          Прогресс: {{ goal.progress_percent|floatformat:0 }}%
+        </div>
+
+        {% if goal.is_completed %}
+        <div class="mt-1 text-success small">Цель достигнута!</div>
+        {% endif %}
+      </div>
+    </div>
+    {% empty %}
+    <p class="text-muted">Добавьте вашу первую финансовую цель.</p>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const mainLabels = {{ chart_labels|safe }};
+  const mainData = {{ chart_data|safe }};
+
+  const colors = [
+    '#0d6efd','#198754','#dc3545','#ffc107',
+    '#6f42c1','#20c997','#fd7e14','#0dcaf0',
+    '#6610f2','#e83e8c'
+  ];
+
+  const ctxMain = document.getElementById('mainPeriodChart');
+  let mainChart = null;
+
+  function renderChart() {
+    if (!ctxMain) return;
+
+    const total = mainData.reduce((sum, v) => sum + v, 0);
+    const datasetColors = mainLabels.map((_, i) => colors[i % colors.length]);
+
+    if (mainChart) {
+      mainChart.destroy();
+    }
+
+    mainChart = new Chart(ctxMain, {
+      type: 'doughnut',
+      data: {
+        labels: mainLabels,
+        datasets: [{
+          data: mainData,
+          backgroundColor: datasetColors,
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const label = context.label || '';
+                const value = context.raw || 0;
+                const percent = total ? ((value / total) * 100).toFixed(1) : 0;
+                return label + ': ' + value + ' ₽ (' + percent + '%)';
+              }
+            }
+          },
+          datalabels: {
+            color: '#fff',
+            font: {
+              weight: 'bold',
+              size: 12,
+            },
+            formatter: function(value, context) {
+              const total = context.dataset.data.reduce((a, b) => a + b, 0);
+              if (!total || !value) return '';
+              const percent = (value / total * 100).toFixed(1);
+              return percent + '%';
+            }
+          }
+        }
+      }
+    });
+
+    renderCustomLegend(datasetColors, total);
+  }
+
+  function renderCustomLegend(datasetColors, total) {
+    const legendEl = document.getElementById('chart-legend');
+    if (!legendEl) return;
+
+    legendEl.innerHTML = '';
+
+    mainLabels.forEach((label, index) => {
+      const value = mainData[index] || 0;
+      if (!value) return;
+
+      const percent = total ? ((value / total) * 100).toFixed(1) : 0;
+      const li = document.createElement('li');
+      li.className = 'd-flex align-items-center mb-1';
+
+      const colorBox = document.createElement('span');
+      colorBox.style.display = 'inline-block';
+      colorBox.style.width = '10px';
+      colorBox.style.height = '10px';
+      colorBox.style.borderRadius = '3px';
+      colorBox.style.marginRight = '6px';
+      colorBox.style.backgroundColor = datasetColors[index];
+
+      const textSpan = document.createElement('span');
+      textSpan.textContent = label + ': ' + value + ' ₽ (' + percent + '%)';
+
+      li.appendChild(colorBox);
+      li.appendChild(textSpan);
+      legendEl.appendChild(li);
+    });
+
+    if (!legendEl.innerHTML) {
+      const li = document.createElement('li');
+      li.className = 'text-muted';
+      li.textContent = 'Нет данных для выбранного периода и фильтров';
+      legendEl.appendChild(li);
+    }
+  }
+
+  renderChart();
+
+  const filtersForm = document.getElementById('filters-form');
+  if (filtersForm) {
+    const autoInputs = filtersForm.querySelectorAll('.auto-submit');
+    autoInputs.forEach((el) => {
+      el.addEventListener('change', () => {
+        filtersForm.submit();
+      });
+    });
+  }
+
+  function formatDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const dateFromInput = document.getElementById('date_from');
+  const dateToInput = document.getElementById('date_to');
+
+  const periodButtons = document.querySelectorAll('.period-btn');
+  periodButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!dateFromInput || !dateToInput) return;
+
+      const today = new Date();
+      let start = new Date(today);
+
+      const period = btn.getAttribute('data-period');
+      if (period === 'today') {
+      } else {
+        const days = parseInt(period, 10);
+        start.setDate(today.getDate() - days);
+      }
+
+      dateFromInput.value = formatDate(start);
+      dateToInput.value = formatDate(today);
+      filtersForm.submit();
+    });
+  });
+</script>
+{% endblock %}
